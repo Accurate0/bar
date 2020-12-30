@@ -50,6 +50,7 @@ typedef struct area_t {
     bool complete;
     unsigned align;
     unsigned button;
+    signed uid;
     xcb_window_t window;
     char *cmd;
 } area_t;
@@ -427,6 +428,17 @@ area_get (xcb_window_t win, const int btn, const int x)
     return NULL;
 }
 
+area_t *
+area_get_by_id (xcb_window_t win, const int uid, const int btn)
+{
+    for (int i = area_stack.index - 1; i >= 0; i--) {
+        area_t *a = &area_stack.ptr[i];
+        if (a->window == win && a->button == btn && a->uid == uid)
+            return a;
+    }
+    return NULL;
+}
+
 void
 area_shift (xcb_window_t win, const int align, int delta)
 {
@@ -445,7 +457,7 @@ area_shift (xcb_window_t win, const int align, int delta)
 }
 
 bool
-area_add (char *str, const char *optend, char **end, monitor_t *mon, const int x, const int align, const int button)
+area_add (char *str, const char *optend, char **end, monitor_t *mon, const int x, const int align, const int button, const int uid)
 {
     int i;
     char *trail;
@@ -525,6 +537,7 @@ area_add (char *str, const char *optend, char **end, monitor_t *mon, const int x
     a->begin = x;
     a->window = mon->window;
     a->button = button;
+    a->uid = uid;
 
     *end = trail + 1;
 
@@ -676,10 +689,18 @@ parse (char *text)
                     // Define input area.
                     case 'A': {
                         button = XCB_BUTTON_INDEX_1;
-                        // The range is 1-5
-                        if (isdigit(*p) && (*p > '0' && *p < '6'))
+                        // The range is 1-7
+                        if (isdigit(*p) && (*p > '0' && *p < '8'))
                             button = *p++ - '0';
-                        if (!area_add(p, block_end, &p, cur_mon, pos_x, align, button))
+
+                        // might have id
+                        int uid = -1;
+                        char *endptr = NULL;
+                        if(*p == ',')
+                            uid = strtol(++p, &endptr, 10);
+                        p = endptr ? endptr : p;
+
+                        if (!area_add(p, block_end, &p, cur_mon, pos_x, align, button, uid))
                             return;
                     } break;
 
@@ -1001,7 +1022,8 @@ monitor_new (int x, int y, int width, int height, char *name)
             ret->x, ret->y, width, bh, 0,
             XCB_WINDOW_CLASS_INPUT_OUTPUT, visual,
             XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP,
-            (const uint32_t []){ bgc.v, bgc.v, dock, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS, colormap });
+            (const uint32_t []){ bgc.v, bgc.v, dock, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS
+            | XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_POINTER_MOTION, colormap });
 
     ret->pixmap = xcb_generate_id(c);
     xcb_create_pixmap(c, depth, ret->pixmap, ret->window, width, bh);
@@ -1561,12 +1583,16 @@ main (int argc, char **argv)
     xcb_generic_event_t *ev;
     xcb_expose_event_t *expose_ev;
     xcb_button_press_event_t *press_ev;
+    xcb_motion_notify_event_t *hover_ev;
     char input[4096] = {0, };
     size_t input_offset = 0;
     bool permanent = false;
     int geom_v[4] = { -1, -1, 0, 0 };
     int ch;
     char *wm_name;
+    int old_area_uid = -1;
+    int old_area_leave_uid = -1;
+    int old_event = -1;
 
     // Install the parachute!
     atexit(cleanup);
@@ -1722,6 +1748,41 @@ main (int argc, char **argv)
                                 }
                             }
                             break;
+                        case XCB_LEAVE_NOTIFY:
+                        case XCB_ENTER_NOTIFY:
+                        case XCB_MOTION_NOTIFY:
+                            hover_ev = (xcb_motion_notify_event_t *)ev;
+                            {
+                                int type = ev->response_type & 0x7F;
+                                int detail = type == 6 ? type : type - 1;
+                                area_t *area = area_get(hover_ev->event, detail, hover_ev->event_x);
+                                area_t *area_leave = area_get(hover_ev->event, 7, hover_ev->event_x);
+
+                                // don't support hover on sections without uid
+                                if(area && area->uid < 0)
+                                    break;
+
+                                if(area && area->uid == old_area_uid && old_event == detail)
+                                    break;
+
+                                area_t *old_area_leave = area_get_by_id(hover_ev->event, old_area_leave_uid, 7);
+                                if(old_area_leave && old_area_leave_uid > 0) {
+                                    (void)write(STDOUT_FILENO, old_area_leave->cmd, strlen(old_area_leave->cmd));
+                                    (void)write(STDOUT_FILENO, "\n", 1);
+                                }
+
+                                // we get here when we've changed areas
+                                old_area_leave_uid = area_leave ? area_leave->uid : -1;
+                                old_area_uid = area ? area->uid : -1;
+                                old_event = detail;
+
+                                // Respond to the hover
+                                if (area && detail == 6) {
+                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
+                                    (void)write(STDOUT_FILENO, "\n", 1);
+                                }
+                            }
+                        break;
                     }
 
                     free(ev);
