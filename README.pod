@@ -6,7 +6,7 @@ lemonbar - Featherweight lemon-scented bar
 
 =head1 SYNOPSIS
 
-I<lemonbar> [-h | -g I<width>B<x>I<height>B<+>I<x>B<+>I<y> | -r | -b | -d | -f I<font> | -p | -n I<name> | -u I<pixel> | -B I<color> | -F I<color> | -U I<color> | -o]
+I<lemonbar> [-h | -g I<width>B<x>I<height>B<+>I<x>B<+>I<y> | -r | -b | -d | -f I<font> | -p | -n I<name> | -u I<pixel> | -B I<color> | -F I<color> | -U I<color> | -L I<color> | -o]
 
 =head1 DESCRIPTION
 
@@ -72,6 +72,10 @@ Set the foreground color of the bar. Accepts the same color formats as B<-B>.
 
 Set the underline color of the bar. Accepts the same color formats as B<-B>.
 
+=item B<-L> I<color>
+
+Set the overline color of the bar. Accepts the same color formats as B<-B>.
+
 =item B<-o> I<pixel>
 
 Add a vertical offset to the text, it can be negative.
@@ -119,6 +123,10 @@ Set the font used to draw the following text. The parameter I<index> can either 
 =item B<U>I<color>
 
 Set the text underline color. The parameter I<color> can be I<-> or a color in one of the formats mentioned before. The special value I<-> resets the color to the default one.
+
+=item B<L>I<color>
+
+Set the text overline color. The parameter I<color> can be I<-> or a color in one of the formats mentioned before. The special value I<-> resets the color to the default one.
 
 =item B<A>I<button>:I<command>:
 

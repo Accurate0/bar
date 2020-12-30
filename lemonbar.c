@@ -84,7 +84,8 @@ enum {
 enum {
     GC_DRAW = 0,
     GC_CLEAR,
-    GC_ATTR,
+    GC_UNDER,
+    GC_OVER,
     GC_MAX
 };
 
@@ -102,8 +103,8 @@ static bool dock = false;
 static bool topbar = true;
 static int bw = -1, bh = -1, bx = 0, by = 0;
 static int bu = 1; // Underline height
-static rgba_t fgc, bgc, ugc;
-static rgba_t dfgc, dbgc, dugc;
+static rgba_t fgc, bgc, ugc, ogc;
+static rgba_t dfgc, dbgc, dugc, dogc;
 static area_stack_t area_stack;
 
 static const rgba_t BLACK = (rgba_t){ .r = 0, .g = 0, .b = 0, .a = 255 };
@@ -130,7 +131,8 @@ update_gc (void)
 {
     xcb_change_gc(c, gc[GC_DRAW], XCB_GC_FOREGROUND, (const uint32_t []){ fgc.v });
     xcb_change_gc(c, gc[GC_CLEAR], XCB_GC_FOREGROUND, (const uint32_t []){ bgc.v });
-    xcb_change_gc(c, gc[GC_ATTR], XCB_GC_FOREGROUND, (const uint32_t []){ ugc.v });
+    xcb_change_gc(c, gc[GC_UNDER], XCB_GC_FOREGROUND, (const uint32_t []){ ugc.v });
+    xcb_change_gc(c, gc[GC_OVER], XCB_GC_FOREGROUND, (const uint32_t []){ ogc.v });
     XftColorFree(dpy, visual_ptr, colormap , &sel_fg);
     char color[] = "#ffffff";
     uint32_t nfgc = fgc.v & 0x00ffffff;
@@ -280,9 +282,9 @@ draw_lines (monitor_t *mon, int x, int w)
 {
     /* We can render both at the same time */
     if (attrs & ATTR_OVERL)
-        fill_rect(mon->pixmap, gc[GC_ATTR], x, 0, w, bu);
+        fill_rect(mon->pixmap, gc[GC_OVER], x, 0, w, bu);
     if (attrs & ATTR_UNDERL)
-        fill_rect(mon->pixmap, gc[GC_ATTR], x, bh - bu, w, bu);
+        fill_rect(mon->pixmap, gc[GC_UNDER], x, bh - bu, w, bu);
 }
 
 void
@@ -613,7 +615,9 @@ parse (char *text)
     // Reset the default color set
     bgc = dbgc;
     fgc = dfgc;
-    ugc = fgc;
+    ugc = dugc;
+    ogc = dogc;
+
     update_gc();
     // Reset the default attributes
     attrs = 0;
@@ -708,6 +712,7 @@ parse (char *text)
                     case 'B': bgc = parse_color(p, &p, dbgc); update_gc(); break;
                     case 'F': fgc = parse_color(p, &p, dfgc); update_gc(); break;
                     case 'U': ugc = parse_color(p, &p, dugc); update_gc(); break;
+                    case 'L': ogc = parse_color(p, &p, dogc); update_gc(); break;
 
                     // Set current monitor used for drawing.
                     case 'S': {
@@ -1495,8 +1500,11 @@ init (char *wm_name)
     gc[GC_CLEAR] = xcb_generate_id(c);
     xcb_create_gc(c, gc[GC_CLEAR], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ bgc.v });
 
-    gc[GC_ATTR] = xcb_generate_id(c);
-    xcb_create_gc(c, gc[GC_ATTR], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ ugc.v });
+    gc[GC_UNDER] = xcb_generate_id(c);
+    xcb_create_gc(c, gc[GC_UNDER], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ ugc.v });
+
+    gc[GC_OVER] = xcb_generate_id(c);
+    xcb_create_gc(c, gc[GC_OVER], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ ogc.v });
 
     // Make the bar visible and clear the pixmap
     for (monitor_t *mon = monhead; mon; mon = mon->next) {
@@ -1560,8 +1568,10 @@ cleanup (void)
         xcb_free_gc(c, gc[GC_DRAW]);
     if (gc[GC_CLEAR])
         xcb_free_gc(c, gc[GC_CLEAR]);
-    if (gc[GC_ATTR])
-        xcb_free_gc(c, gc[GC_ATTR]);
+    if (gc[GC_UNDER])
+        xcb_free_gc(c, gc[GC_UNDER]);
+    if (gc[GC_OVER])
+        xcb_free_gc(c, gc[GC_OVER]);
     if (c)
         xcb_disconnect(c);
 }
@@ -1603,6 +1613,7 @@ main (int argc, char **argv)
     dbgc = bgc = BLACK;
     dfgc = fgc = WHITE;
     dugc = ugc = fgc;
+    dogc = ogc = fgc;
 
     // A safe default
     wm_name = NULL;
@@ -1610,11 +1621,11 @@ main (int argc, char **argv)
     // Connect to the Xserver and initialize scr
     xconn();
 
-    while ((ch = getopt(argc, argv, "hg:o:bdf:a:pu:B:F:U:n:r:")) != -1) {
+    while ((ch = getopt(argc, argv, "hg:o:bdf:a:pu:B:F:U:L:n:r:")) != -1) {
         switch (ch) {
             case 'h':
                 printf ("lemonbar version %s\n", VERSION);
-                printf ("usage: %s [-h | -g | -r | -b | -d | -f | -p | -n | -u | -B | -F | -o]\n"
+                printf ("usage: %s [-h | -g | -r | -b | -d | -f | -p | -n | -u | -B | -F | -U | -L | -o]\n"
                         "\t-h Show this help\n"
                         "\t-g Set the bar geometry {width}x{height}+{xoffset}+{yoffset}\n"
                         "\t-r Add randr output by name\n"
@@ -1626,6 +1637,8 @@ main (int argc, char **argv)
                         "\t-u Set the underline/overline height in pixels\n"
                         "\t-B Set background color in #AARRGGBB\n"
                         "\t-F Set foreground color in #AARRGGBB\n"
+                        "\t-U Set underline color in #AARRGGBB\n"
+                        "\t-L Set overline color in #AARRGGBB\n"
                         "\t-o Add a vertical offset to the text, it can be negative\n", argv[0]);
                 exit (EXIT_SUCCESS);
             case 'g': (void)parse_geometry_string(optarg, geom_v); break;
@@ -1640,6 +1653,7 @@ main (int argc, char **argv)
             case 'B': dbgc = bgc = parse_color(optarg, NULL, BLACK); break;
             case 'F': dfgc = fgc = parse_color(optarg, NULL, WHITE); break;
             case 'U': dugc = ugc = parse_color(optarg, NULL, fgc); break;
+            case 'L': dogc = ogc = parse_color(optarg, NULL, fgc); break;
         }
     }
 
