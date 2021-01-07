@@ -618,6 +618,15 @@ parse (char *text)
     ugc = dugc;
     ogc = dogc;
 
+    // parse for %{BG#color} to actually set background
+    // expect to find this at the beginning of the string
+    if(*p != '\0' && *p != '\n') {
+        if(!strncmp(p, "%{BG", 4)) {
+            bgc = dbgc = parse_color(p + 4, &p, dbgc);
+            p++;
+        }
+    }
+
     update_gc();
     // Reset the default attributes
     attrs = 0;

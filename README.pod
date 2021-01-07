@@ -112,6 +112,10 @@ Offset the current position by I<width> pixels in the alignment direction.
 
 Set the text background color. The parameter I<color> can be I<-> or a color in one of the formats mentioned before. The special value I<-> resets the color to the default one.
 
+=item B<BG>I<color>
+
+Set the bar background colour overriding the I<-B> flag, this must be at the beginning of the string. The parameter I<color> can be a color in one of the formats mentioned before.
+
 =item B<F>I<color>
 
 Set the text foreground color. The parameter I<color> can be I<-> or a color in one of the formats mentioned before. The special value I<-> resets the color to the default one.
