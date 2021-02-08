@@ -103,6 +103,7 @@ static bool dock = false;
 static bool topbar = true;
 static int bw = -1, bh = -1, bx = 0, by = 0;
 static int bu = 1; // Underline height
+static int bo = 1; // Overline height
 static rgba_t fgc, bgc, ugc, ogc;
 static rgba_t dfgc, dbgc, dugc, dogc;
 static area_stack_t area_stack;
@@ -282,7 +283,7 @@ draw_lines (monitor_t *mon, int x, int w)
 {
     /* We can render both at the same time */
     if (attrs & ATTR_OVERL)
-        fill_rect(mon->pixmap, gc[GC_OVER], x, 0, w, bu);
+        fill_rect(mon->pixmap, gc[GC_OVER], x, 0, w, bo);
     if (attrs & ATTR_UNDERL)
         fill_rect(mon->pixmap, gc[GC_UNDER], x, bh - bu, w, bu);
 }
@@ -1630,11 +1631,11 @@ main (int argc, char **argv)
     // Connect to the Xserver and initialize scr
     xconn();
 
-    while ((ch = getopt(argc, argv, "hg:o:bdf:a:pu:B:F:U:L:n:r:")) != -1) {
+    while ((ch = getopt(argc, argv, "hg:o:bdf:a:pu:B:F:U:L:n:r:l:")) != -1) {
         switch (ch) {
             case 'h':
                 printf ("lemonbar version %s\n", VERSION);
-                printf ("usage: %s [-h | -g | -r | -b | -d | -f | -p | -n | -u | -B | -F | -U | -L | -o]\n"
+                printf ("usage: %s [-h | -g | -r | -b | -d | -f | -p | -n | -u | -l | -B | -F | -U | -L | -o]\n"
                         "\t-h Show this help\n"
                         "\t-g Set the bar geometry {width}x{height}+{xoffset}+{yoffset}\n"
                         "\t-r Add randr output by name\n"
@@ -1643,7 +1644,8 @@ main (int argc, char **argv)
                         "\t-f Set the font name to use\n"
                         "\t-p Don't close after the data ends\n"
                         "\t-n Set the WM_NAME atom to the specified value for this bar\n"
-                        "\t-u Set the underline/overline height in pixels\n"
+                        "\t-u Set the underline height in pixels\n"
+                        "\t-l Set the overline height in pixels\n"
                         "\t-B Set background color in #AARRGGBB\n"
                         "\t-F Set foreground color in #AARRGGBB\n"
                         "\t-U Set underline color in #AARRGGBB\n"
@@ -1659,6 +1661,7 @@ main (int argc, char **argv)
             case 'd': dock = true; break;
             case 'f': font_load(optarg); break;
             case 'u': bu = strtoul(optarg, NULL, 10); break;
+            case 'l': bo = strtoul(optarg, NULL, 10); break;
             case 'B': dbgc = bgc = parse_color(optarg, NULL, BLACK); break;
             case 'F': dfgc = fgc = parse_color(optarg, NULL, WHITE); break;
             case 'U': dugc = ugc = parse_color(optarg, NULL, fgc); break;
