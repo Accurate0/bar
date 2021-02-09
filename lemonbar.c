@@ -1323,7 +1323,9 @@ get_visual (void)
 
     if (result > 0) {
         visual_ptr = result_ptr->visual;
-        return result_ptr->visualid;
+        VisualID id = result_ptr->visualid;
+        XFree(result_ptr);
+        return id;
     }
 
     //Fallback
